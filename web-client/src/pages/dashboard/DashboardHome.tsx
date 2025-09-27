@@ -1,7 +1,9 @@
 import { useWeb3 } from '../../contexts/Web3Context'
+import { useUser } from '../../contexts/UserContext'
 
 function DashboardHome() {
   const { account, balance, chainId } = useWeb3()
+  const { nullifier, gender, isLoading: isUserLoading } = useUser()
 
   const getNetworkName = (chainId: number | null) => {
     switch (chainId) {
@@ -53,6 +55,61 @@ function DashboardHome() {
             <span style={{ color: '#ff6b35' }}>{getNetworkName(chainId)}</span>
           </div>
         </div>
+      </div>
+      
+      {/* User Identity Data Card */}
+      <div style={{
+        background: 'rgba(0, 212, 255, 0.1)',
+        border: '1px solid rgba(0, 212, 255, 0.3)',
+        borderRadius: '16px',
+        padding: '1.5rem',
+        backdropFilter: 'blur(10px)',
+        marginBottom: '2rem'
+      }}>
+        <h3 style={{ color: '#00d4ff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          🔒 Identity Verification
+        </h3>
+        {isUserLoading ? (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            gap: '0.5rem',
+            color: '#888',
+            padding: '1rem'
+          }}>
+            <span style={{ 
+              width: '16px', 
+              height: '16px', 
+              border: '2px solid transparent',
+              borderTop: '2px solid #00d4ff',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }}></span>
+            Loading identity data...
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#ccc' }}>Nullifier:</span>
+              <span style={{ color: '#00d4ff', fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                {nullifier ? `${nullifier.slice(0, 8)}...${nullifier.slice(-6)}` : 'Not available'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#ccc' }}>Gender:</span>
+              <span style={{ color: '#8b45ff', fontWeight: '600' }}>
+                {gender || 'Not specified'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#ccc' }}>Verification:</span>
+              <span style={{ color: nullifier ? '#00ff88' : '#888' }}>
+                {nullifier ? '✓ Verified' : 'Not verified'}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
       
       <div style={{ 

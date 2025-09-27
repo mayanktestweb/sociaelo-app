@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWeb3 } from '../contexts/Web3Context'
+import { useUser } from '../contexts/UserContext'
 import {SelfQRcodeWrapper, SelfAppBuilder} from '@selfxyz/qrcode'
 
 function Home() {
@@ -13,6 +14,7 @@ function Home() {
     error 
   } = useWeb3()
 
+  const { fetchUserData, isLoading: isUserLoading } = useUser()
 
   const [selfApp, setSelfApp] = useState<any | null>(null)
 
@@ -57,7 +59,19 @@ function Home() {
   const handleSuccessfulVerification = () => {
     // Persist the attestation / session result to your backend, then gate content
     console.log('Verified!')
-    navigate('/dashboard')
+    
+    if (account) {
+      try {
+        fetchUserData(account)
+        navigate('/dashboard')
+      } catch (error) {
+        console.log("Failed to fetch user data:", error)
+        // Still navigate to dashboard even if user data fetch fails
+        navigate('/dashboard')
+      }
+    } else {
+      navigate('/dashboard')
+    }
   }
 
   return (
@@ -196,6 +210,28 @@ function Home() {
                   console.error('Error: Failed to verify identity')
                 }}
               />
+              
+              {isUserLoading && (
+                <div style={{
+                  marginTop: '1rem',
+                  color: '#00d4ff',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ 
+                    width: '16px', 
+                    height: '16px', 
+                    border: '2px solid transparent',
+                    borderTop: '2px solid #00d4ff',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }}></span>
+                  Fetching user data...
+                </div>
+              )}
             </div>
           </div>
         )}

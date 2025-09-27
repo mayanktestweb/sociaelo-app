@@ -1,5 +1,6 @@
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { useWeb3 } from '../contexts/Web3Context'
+import { useUser } from '../contexts/UserContext'
 import DashboardHome from './dashboard/DashboardHome'
 import Create from './dashboard/Create'
 import Profile from './dashboard/Profile'
@@ -8,6 +9,7 @@ function Dashboard() {
   const location = useLocation()
   const navigate = useNavigate()
   const { account, balance, disconnectWallet, isConnected } = useWeb3()
+  const { clearUserData } = useUser()
 
   // Redirect to home if not connected
   if (!isConnected) {
@@ -27,6 +29,7 @@ function Dashboard() {
 
   const handleDisconnect = () => {
     disconnectWallet()
+    clearUserData()
     navigate('/')
   }
 
