@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useWeb3 } from '../contexts/Web3Context'
+import { useUser } from '../contexts/UserContext'
+import lighthouse from '@lighthouse-web3/sdk'
 
 interface PostViewerProps {
   mediaCid: string
@@ -12,7 +15,33 @@ function PostViewer({ mediaCid, textCid, isPublic = false }: PostViewerProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string>('')
 
+  const { account, signer } = useWeb3()
+  const { nullifier } = useUser()
+
   console.log(mediaCid, textCid)
+
+
+
+// Function to sign the authentication message using Web3Provider
+  const signAuthMessage = async () => {
+    if (!account || !signer) {
+      console.error("Wallet not connected or signer not available")
+      return null
+    }
+
+    try {
+      const { message } = (await lighthouse.getAuthMessage(account)).data
+      const signature = await signer.signMessage(message as string)
+      
+      return { signature, signerAddress: account }
+    } catch (error) {
+      console.error("Error signing message with Web3Provider", error)
+      return null
+    }
+  }
+
+
+
 
   useEffect(() => {
     const fetchPostContent = async () => {
@@ -46,6 +75,16 @@ function PostViewer({ mediaCid, textCid, isPublic = false }: PostViewerProps) {
       }
     }
 
+
+    const fetchPrivatePostContent = async () => {
+        try {
+            // 
+        } catch (error) {
+            
+        }
+    }
+
+
     if (mediaCid && textCid) {
       fetchPostContent()
     }
@@ -56,7 +95,7 @@ function PostViewer({ mediaCid, textCid, isPublic = false }: PostViewerProps) {
         URL.revokeObjectURL(imageUrl)
       }
     }
-  }, [mediaCid, textCid])
+  }, [mediaCid, textCid, isPublic])
 
   if (isLoading) {
     return (
