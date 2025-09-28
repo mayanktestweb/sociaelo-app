@@ -4,40 +4,69 @@ import { User } from '../models/User.js';
 
 const router = express.Router();
 
-// GET /api/posts - Get all posts with optional filters
+// GET /api/posts - Get one post at a time with pagination and gender filtering
 router.get('/', async (req, res) => {
   try {
-    const { isPublic, targetGender, creator } = req.query;
+    const { page, gender } = req.query;
     
-    // Build filter object
-    const filter: any = {};
-    
-    if (isPublic !== undefined) {
-      filter.isPublic = isPublic === 'true';
-    }
-    
-    if (targetGender) {
-      filter.targetGender = targetGender;
-    }
-    
-    if (creator) {
-      filter.creator = creator;
+    // Validate required parameters
+    if (!page || !gender) {
+      return res.status(400).json({
+        success: false,
+        error: 'Both page and gender parameters are required'
+      });
     }
 
-    const posts = await Post.find(filter)
-      .populate('creator', 'nullifier gender')
-      .sort({ createdAt: -1 });
+    const pageNumber = parseInt(page as string);
+    if (isNaN(pageNumber) || pageNumber < 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'Page must be a valid number starting from 1'
+      });
+    }
+
+    // Validate gender
+    if (!['M', 'F', 'O', 'A'].includes(gender as string)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Gender must be M, F, O, or A'
+      });
+    }
+
+    // Build filter object
+    const filter: any = {
+      isPublic: true,
+      $or: [
+        { targetGender: 'A' }, // Anyone can see
+        { targetGender: gender } // Matches user's gender
+      ]
+    };
+
+    // Get one post based on page number (skip posts based on page)
+    const skip = pageNumber - 1;
+    
+    const post = await Post.findOne(filter)
+      .sort({ createdAt: -1 }) // Latest first
+      .skip(skip)
+      .exec();
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: 'No more posts available'
+      });
+    }
 
     res.json({
       success: true,
-      data: posts,
-      count: posts.length
+      data: post,
+      page: pageNumber
     });
   } catch (error) {
-    console.error('Error fetching posts:', error);
+    console.error('Error fetching post:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch posts'
+      error: 'Failed to fetch post'
     });
   }
 });
@@ -71,6 +100,7 @@ router.get('/:id', async (req, res) => {
 // POST /api/posts - Create new post
 router.post('/', async (req, res) => {
   try {
+    console.log(req.body);
     const { creator, mediaCid, textCid, isPublic, targetGender } = req.body;
 
     // Validate required fields
@@ -78,23 +108,6 @@ router.post('/', async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'Creator, mediaCid, and textCid are required'
-      });
-    }
-
-    // Verify creator exists
-    const creatorUser = await User.findById(creator);
-    if (!creatorUser) {
-      return res.status(404).json({
-        success: false,
-        error: 'Creator user not found'
-      });
-    }
-
-    // Validate targetGender if provided
-    if (targetGender && !['M', 'F', 'O'].includes(targetGender)) {
-      return res.status(400).json({
-        success: false,
-        error: 'targetGender must be M, F, or O'
       });
     }
 
@@ -108,9 +121,6 @@ router.post('/', async (req, res) => {
     });
 
     const savedPost = await post.save();
-    
-    // Populate creator data in response
-    await savedPost.populate('creator', 'nullifier gender');
 
     res.status(201).json({
       success: true,

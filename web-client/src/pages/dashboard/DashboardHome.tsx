@@ -1,172 +1,230 @@
+import { useState, useEffect } from 'react'
 import { useWeb3 } from '../../contexts/Web3Context'
 import { useUser } from '../../contexts/UserContext'
+import PostViewer from '../../components/PostViewer'
+import axios from 'axios'
+
+interface Post {
+  _id: string
+  mediaCid: string
+  textCid: string
+  isPublic: boolean
+  creator: string
+  targetGender: string
+}
 
 function DashboardHome() {
-  const { account, balance, chainId } = useWeb3()
+  // const { account, balance, chainId } = useWeb3()
   const { nullifier, gender, isLoading: isUserLoading } = useUser()
+  
+  const [currentPost, setCurrentPost] = useState<Post | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [isLoadingPost, setIsLoadingPost] = useState(false)
+  const [error, setError] = useState<string>('')
+  const [hasMorePosts, setHasMorePosts] = useState(true)
 
-  const getNetworkName = (chainId: number | null) => {
-    switch (chainId) {
-      case 1: return 'Ethereum Mainnet'
-      case 11155111: return 'Sepolia Testnet'
-      case 137: return 'Polygon Mainnet'
-      case 80001: return 'Polygon Mumbai'
-      default: return `Chain ID: ${chainId}`
+  // Fetch single post function
+  const fetchPost = async (page: number, userGender: string) => {
+    try {
+      setIsLoadingPost(true)
+      setError('')
+
+      const response = await axios.get('http://localhost:3000/api/posts', {
+        params: {
+          page, gender: userGender, limit: 1
+        }
+      })
+
+      const data = response.data
+      console.log(data)
+      if (response.status === 200) {
+        const _post = {
+          _id: data.data._id,
+          mediaCid: data.data.mediaCid,
+          textCid: data.data.textCid,
+          isPublic: data.data.isPublic,
+          creator: data.data.creator,
+          targetGender: data.data.targetGender
+        }
+        setCurrentPost(_post)
+      } else {
+        setCurrentPost(null)
+      }
+    } catch (err) {
+      console.error('Error fetching post:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch post')
+      setCurrentPost(null)
+    } finally {
+      setIsLoadingPost(false)
+    }
+  }
+
+  // Initial load when gender becomes available
+  useEffect(() => {
+    if (gender && !isUserLoading) {
+      setCurrentPage(1)
+      fetchPost(1, gender)
+    }
+  }, [gender, isUserLoading])
+
+  // Handle next post
+  const handleNextPost = () => {
+    if (!isLoadingPost && hasMorePosts && gender) {
+      const nextPage = currentPage + 1
+      setCurrentPage(nextPage)
+      fetchPost(nextPage, gender)
     }
   }
 
   return (
-    <div style={{ padding: '2rem 0' }}>
-      <h1 style={{ 
-        fontSize: '2rem', 
-        background: 'linear-gradient(45deg, #8b45ff, #00d4ff)', 
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-        marginBottom: '2rem'
-      }}>
-        Dashboard
-      </h1>
-      
-      {/* Wallet Info Card */}
-      <div style={{
-        background: 'rgba(139, 69, 255, 0.1)',
-        border: '1px solid rgba(139, 69, 255, 0.3)',
-        borderRadius: '16px',
-        padding: '1.5rem',
-        backdropFilter: 'blur(10px)',
-        marginBottom: '2rem'
-      }}>
-        <h3 style={{ color: '#8b45ff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          💰 Wallet Info
-        </h3>
-        <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#ccc' }}>Address:</span>
-            <span style={{ color: '#00d4ff', fontFamily: 'monospace' }}>
-              {account ? `${account.slice(0, 8)}...${account.slice(-6)}` : 'N/A'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#ccc' }}>Balance:</span>
-            <span style={{ color: '#8b45ff', fontWeight: '600' }}>{balance} ETH</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#ccc' }}>Network:</span>
-            <span style={{ color: '#ff6b35' }}>{getNetworkName(chainId)}</span>
-          </div>
-        </div>
-      </div>
-      
-      {/* User Identity Data Card */}
-      <div style={{
-        background: 'rgba(0, 212, 255, 0.1)',
-        border: '1px solid rgba(0, 212, 255, 0.3)',
-        borderRadius: '16px',
-        padding: '1.5rem',
-        backdropFilter: 'blur(10px)',
-        marginBottom: '2rem'
-      }}>
-        <h3 style={{ color: '#00d4ff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          🔒 Identity Verification
-        </h3>
-        {isUserLoading ? (
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            gap: '0.5rem',
-            color: '#888',
-            padding: '1rem'
-          }}>
-            <span style={{ 
-              width: '16px', 
-              height: '16px', 
-              border: '2px solid transparent',
-              borderTop: '2px solid #00d4ff',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite'
-            }}></span>
-            Loading identity data...
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gap: '0.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#ccc' }}>Nullifier:</span>
-              <span style={{ color: '#00d4ff', fontFamily: 'monospace', fontSize: '0.9rem' }}>
-                {nullifier ? `${nullifier.slice(0, 8)}...${nullifier.slice(-6)}` : 'Not available'}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#ccc' }}>Gender:</span>
-              <span style={{ color: '#8b45ff', fontWeight: '600' }}>
-                {gender || 'Not specified'}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#ccc' }}>Verification:</span>
-              <span style={{ color: nullifier ? '#00ff88' : '#888' }}>
-                {nullifier ? '✓ Verified' : 'Not verified'}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      <div style={{ 
-        display: 'grid', 
-        gap: '1rem', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        marginBottom: '2rem'
-      }}>
+    <div style={{ padding: '1rem' }}>
+      {/* Loading state for gender */}
+      {isUserLoading && (
         <div style={{
           background: 'rgba(139, 69, 255, 0.1)',
           border: '1px solid rgba(139, 69, 255, 0.3)',
           borderRadius: '16px',
-          padding: '1.5rem',
+          padding: '2rem',
+          textAlign: 'center',
           backdropFilter: 'blur(10px)'
         }}>
-          <h3 style={{ color: '#8b45ff', marginBottom: '1rem' }}>📊 Analytics</h3>
-          <p style={{ color: '#ccc', fontSize: '0.9rem' }}>View your social metrics and engagement</p>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            color: '#8b45ff'
+          }}>
+            <div style={{
+              width: '20px',
+              height: '20px',
+              border: '2px solid transparent',
+              borderTop: '2px solid #8b45ff',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }}></div>
+            Waiting for identity verification...
+          </div>
         </div>
-        
+      )}
+
+      {/* Error state */}
+      {error && !isUserLoading && (
+        <div style={{
+          background: 'rgba(255, 107, 53, 0.1)',
+          border: '1px solid rgba(255, 107, 53, 0.3)',
+          borderRadius: '16px',
+          padding: '2rem',
+          textAlign: 'center',
+          backdropFilter: 'blur(10px)',
+          color: '#ff6b35',
+          marginBottom: '1rem'
+        }}>
+          ❌ {error}
+        </div>
+      )}
+
+      {/* Loading state for post */}
+      {isLoadingPost && gender && (
+        <div style={{
+          background: 'rgba(139, 69, 255, 0.1)',
+          border: '1px solid rgba(139, 69, 255, 0.3)',
+          borderRadius: '16px',
+          padding: '2rem',
+          textAlign: 'center',
+          backdropFilter: 'blur(10px)',
+          marginBottom: '1rem'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            color: '#8b45ff'
+          }}>
+            <div style={{
+              width: '20px',
+              height: '20px',
+              border: '2px solid transparent',
+              borderTop: '2px solid #8b45ff',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }}></div>
+            Loading post...
+          </div>
+        </div>
+      )}
+
+      {/* Post Display */}
+      {!isUserLoading && gender && currentPost && !isLoadingPost && (
+        <>
+          <PostViewer
+            mediaCid={currentPost.mediaCid}
+            textCid={currentPost.textCid}
+            isPublic={currentPost.isPublic}
+          />
+          
+          {/* Next Post Button */}
+          {hasMorePosts && (
+            <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+              <button
+                onClick={handleNextPost}
+                disabled={isLoadingPost}
+                style={{
+                  background: 'linear-gradient(45deg, #8b45ff, #00d4ff)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '12px 24px',
+                  color: '#ffffff',
+                  fontSize: '1rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(10px)',
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 4px 15px rgba(139, 69, 255, 0.4)'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(139, 69, 255, 0.6)'
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)'
+                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(139, 69, 255, 0.4)'
+                }}
+              >
+                Next Post →
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* No posts state */}
+      {!isUserLoading && gender && !currentPost && !isLoadingPost && !error && (
         <div style={{
           background: 'rgba(0, 212, 255, 0.1)',
           border: '1px solid rgba(0, 212, 255, 0.3)',
           borderRadius: '16px',
-          padding: '1.5rem',
-          backdropFilter: 'blur(10px)'
+          padding: '2rem',
+          textAlign: 'center',
+          backdropFilter: 'blur(10px)',
+          color: '#00d4ff'
         }}>
-          <h3 style={{ color: '#00d4ff', marginBottom: '1rem' }}>🌟 Recent Activity</h3>
-          <p style={{ color: '#ccc', fontSize: '0.9rem' }}>Latest interactions and updates</p>
+          📭 No posts available for your gender preference yet.
         </div>
-      </div>
-      
-      <div style={{
-        background: 'rgba(255, 107, 53, 0.1)',
-        border: '1px solid rgba(255, 107, 53, 0.3)',
-        borderRadius: '16px',
-        padding: '1.5rem',
-        backdropFilter: 'blur(10px)',
-        marginBottom: '1rem'
-      }}>
-        <h3 style={{ color: '#ff6b35', marginBottom: '1rem' }}>🚀 Quick Actions</h3>
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          <button className="neon-button" style={{ flex: 1, minWidth: '120px' }}>
-            New Post
-          </button>
-          <button 
-            className="neon-button" 
-            style={{ 
-              flex: 1, 
-              minWidth: '120px',
-              background: 'linear-gradient(45deg, #ff6b35, #f7931e)',
-              boxShadow: '0 4px 15px rgba(255, 107, 53, 0.4)'
-            }}
-          >
-            Mint NFT
-          </button>
+      )}
+
+      {/* End of posts state */}
+      {!isUserLoading && gender && currentPost && !hasMorePosts && !isLoadingPost && (
+        <div style={{
+          textAlign: 'center',
+          marginTop: '1rem',
+          color: 'rgba(255, 255, 255, 0.6)',
+          fontSize: '0.9rem'
+        }}>
+          🎉 You've reached the end of the feed!
         </div>
-      </div>
+      )}
     </div>
   )
 }

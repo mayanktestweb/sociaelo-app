@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@lighthouse-web3/sdk": "^0.4.3",
     "@selfxyz/qrcode": "^1.0.15",
     "axios": "^1.12.2",
     "ethers": "^6.15.0",

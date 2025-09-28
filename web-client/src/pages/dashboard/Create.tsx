@@ -1,16 +1,180 @@
 import { useState } from 'react'
-
+import lighthouse from "@lighthouse-web3/sdk";
+import { useWeb3 } from '../../contexts/Web3Context'
+import { useUser } from '../../contexts/UserContext';
+import axios from 'axios';
 
 function Create() {
-  const [targetGender, setTargetGender] = useState('anyone')
+
+  const apiKey = import.meta.env.LIGHTHOUSE_API_KEY || "265dfb0d.1d24c128433a40348376f47eef4dc988";
+  const { account, signer } = useWeb3()
+  const { nullifier } = useUser()
+
+  const [targetGender, setTargetGender] = useState('A')
   const [isPublic, setIsPublic] = useState(true)
-  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [selectedImage, setSelectedImage] = useState<FileList | null>(null)
   const [description, setDescription] = useState('');
 
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file && file.type.startsWith('image/')) {
-      setSelectedImage(file)
+    // const file = event.target.files?.[0]
+    // if (file && file.type.startsWith('image/')) {
+    //   setSelectedImage(file)
+    // }
+    setSelectedImage(event.target.files)
+  }
+
+  const handlePublish = async () => {
+    if (!selectedImage || !description) {
+      alert("Please provide both an image and a description.")
+      return
+    }
+    if (isPublic) {
+      await publicUploading()
+    } else {
+      await privateUploading()
+    }
+  }
+
+  const publicUploading = async () => {
+    try {
+      const output = await lighthouse.upload(selectedImage, apiKey);
+      const mediaCid = output.data.Hash;
+      const response = await lighthouse.uploadText(description, apiKey, "description")
+      const textCid = response.data.Hash;
+
+      // create and upload post with media and text cid
+      await uploadFileToServer(mediaCid, textCid);
+      alert("Successfully uploaded files!");
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
+  const privateUploading = async () => {
+    try {
+      const encryptionAuth = await signAuthMessage()
+      if (!encryptionAuth) {
+        console.error("Failed to sign the message.")
+        return
+      }
+
+      const { signature, signerAddress } = encryptionAuth
+      const output = await lighthouse.uploadEncrypted(
+        selectedImage,
+        apiKey,
+        signerAddress,
+        signature,
+      )
+      // encrypted media cid
+      const mediaCid = output.data[0].Hash;
+
+      // plaintext text cid
+      const response = await lighthouse.uploadText(description, apiKey, "description")
+      const textCid = response.data.Hash;
+
+      // now impose condition on media cid
+
+      // Conditions to add
+      const conditions = [
+        {
+              id: 1,
+              chain: "Filecoin_Testnet",
+              method: "isUserSubscriber",
+              standardContractType: "Custom",
+              contractAddress: "0x267446Dcf6Ba88A02786694988d914A7805A095C",
+              returnValueTest: {
+                  comparator: "==",
+                  value: "true"
+              },
+              parameters: ["creator", "subscriber"],
+              inputArrayType: ["uint256", "uint256"],
+              outputType: "bool"
+        },
+      ]
+
+      // Aggregator is what kind of operation to apply to access conditions
+      // Suppose there are two conditions then you can apply ([1] and [2]), ([1] or [2]), !([1] and [2]).
+      const aggregator = "([1])"
+
+      const res = await lighthouse.applyAccessCondition(
+        account as string,
+        mediaCid,
+        signature,
+        conditions,
+        aggregator,
+        "EVM"
+      );
+
+      console.log("Successfully imposed condition on media cid:", res);
+
+      // create and upload post with media and text cid
+      await uploadFileToServer(mediaCid, textCid);
+
+      alert("Successfully uploaded files!");
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
+
+  // Function to sign the authentication message using Web3Provider
+  const signAuthMessage = async () => {
+    if (!account || !signer) {
+      console.error("Wallet not connected or signer not available")
+      return null
+    }
+
+    try {
+      const { message } = (await lighthouse.getAuthMessage(account)).data
+      const signature = await signer.signMessage(message as string)
+      
+      return { signature, signerAddress: account }
+    } catch (error) {
+      console.error("Error signing message with Web3Provider", error)
+      return null
+    }
+  }
+
+
+  const uploadFileToServer = async (mediaCid: string, textCid: string) => {
+    try {
+      const formData = new FormData();
+      formData.append("creator", nullifier || "");
+      formData.append("mediaCid", mediaCid);
+      formData.append("textCid", textCid);
+      formData.append("targetGender", targetGender);
+      formData.append("isPublic", isPublic ? "true" : "false");
+
+      const serverUrl = "http://localhost:3000"; // Replace with your server URL
+
+      // const response = await fetch(`${serverUrl}/api/posts`, {
+      //   method: "POST",
+      //   body: formData
+      // });
+
+      // if (!response.ok) {
+      //   throw new Error("Failed to upload files");
+      // }
+
+      // const data = await response.json();
+      // console.log("Successfully uploaded files:", data);
+      const response = await axios.post(`${serverUrl}/api/posts`,
+        {
+          creator: nullifier || "",
+          mediaCid,
+          textCid,
+          targetGender,
+          isPublic
+        }
+      )
+
+      if (response.data.success) {
+        console.log("Successfully uploaded files:", response.data);
+      } else {
+        throw new Error("Failed to upload files");
+      }
+    } catch (error) {
+      console.log(error);
     }
   }
 
@@ -82,7 +246,7 @@ function Create() {
               alignItems: 'center',
               gap: '0.5rem'
             }}>
-              ✓ {selectedImage.name}
+              ✓ {selectedImage[0].name}
             </span>
           )}
         </div>
@@ -125,9 +289,9 @@ function Create() {
               fontSize: '0.9rem',
               color: '#ccc'
             }}>
-              <div>📸 {selectedImage.name}</div>
+              <div>📸 {selectedImage[0].name}</div>
               <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>
-                Size: {(selectedImage.size / 1024 / 1024).toFixed(2)} MB
+                Size: {(selectedImage[0].size / 1024 / 1024).toFixed(2)} MB
               </div>
             </div>
           </div>
@@ -158,9 +322,9 @@ function Create() {
             value={targetGender}
             onChange={(e) => setTargetGender(e.target.value)}
           >
-            <option value="anyone" style={{ background: '#1a1a1a' }}>Anyone</option>
-            <option value="male" style={{ background: '#1a1a1a' }}>Male</option>
-            <option value="female" style={{ background: '#1a1a1a' }}>Female</option>
+            <option value="A" style={{ background: '#1a1a1a' }}>Anyone</option>
+            <option value="M" style={{ background: '#1a1a1a' }}>Male</option>
+            <option value="F" style={{ background: '#1a1a1a' }}>Female</option>
           </select>
         </div>
 
@@ -236,7 +400,10 @@ function Create() {
           </span>
         </div>
         
-        <button className="neon-button" style={{ width: '100%' }}>
+        <button className="neon-button" style={{ width: '100%' }}
+          disabled={!selectedImage || !description}
+          onClick={handlePublish}
+        >
           Publish to Blockchain
         </button>
       </div>

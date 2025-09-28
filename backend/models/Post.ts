@@ -6,7 +6,7 @@ export interface IPost extends Document {
   mediaCid: string;
   textCid: string;
   isPublic: boolean;
-  targetGender?: 'M' | 'F' | 'O';
+  targetGender?: 'M' | 'F' | 'O' | 'A';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,7 +34,7 @@ const postSchema = new Schema<IPost>({
   },
   targetGender: {
     type: String,
-    enum: ['M', 'F', 'O'],
+    enum: ['M', 'F', 'O', 'A'],
     required: false
   }
 }, {
